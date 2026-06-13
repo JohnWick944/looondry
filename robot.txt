@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://johnwick944.github.io/looondry/sitemap.xml
