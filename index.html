@@ -467,6 +467,61 @@ footer,
   }
 }
 
+
+/* PAYMENT FLOW FIX */
+#checkoutOverlay.open{
+  display:flex!important;
+  align-items:center;
+  justify-content:center;
+}
+#checkoutOverlay .checkout-box{
+  position:relative;
+  margin:0 auto!important;
+}
+#paymentStage:not(.hidden){
+  display:grid!important;
+  opacity:1!important;
+  visibility:visible!important;
+}
+#detailsStage:not(.hidden){
+  display:grid!important;
+  opacity:1!important;
+  visibility:visible!important;
+}
+#orderResult:not(.hidden){
+  display:block!important;
+}
+@media(max-width:680px){
+  #checkoutOverlay.open{
+    display:block!important;
+    overflow-y:auto!important;
+    -webkit-overflow-scrolling:touch;
+  }
+  #checkoutOverlay .checkout-box{
+    min-height:auto!important;
+    max-height:none!important;
+    margin:0!important;
+    overflow:visible!important;
+  }
+  #detailsStage:not(.hidden),
+  #paymentStage:not(.hidden){
+    display:block!important;
+    width:100%!important;
+  }
+  #paymentStage .payment-card,
+  #paymentStage .qr-card{
+    display:block!important;
+    width:100%!important;
+    margin-bottom:18px!important;
+  }
+  #paidBtn,
+  #backBtn,
+  #upiLink{
+    width:100%!important;
+    justify-content:center!important;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -827,35 +882,271 @@ document.addEventListener("click",e=>{
 document.getElementById("closeCart").addEventListener("click",()=>closeOverlay("cartOverlay"));
 document.getElementById("closeCheckout").addEventListener("click",()=>closeOverlay("checkoutOverlay"));
 
-function renderCheckout(){
-  const t=totals();
-  document.getElementById("checkoutItems").innerHTML=cart.map(i=>`<div class="order-line"><span>${i.name} × ${i.qty}</span><b>${money(i.price*i.qty)}</b></div>`).join("");
-  ["checkoutSubtotal","paySubtotal"].forEach(id=>document.getElementById(id).textContent=money(t.subtotal));
-  ["checkoutGst","payGst"].forEach(id=>document.getElementById(id).textContent=money(t.gst));
-  ["checkoutTotal","payTotal"].forEach(id=>document.getElementById(id).textContent=money(t.total));
-  document.getElementById("upiLink").href=`upi://pay?pa=${encodeURIComponent(UPI_ID)}&pn=LOONDRY%20Urban&am=${t.total}&cu=INR&tn=LOONDRY%20Order`;
+
+function getCheckoutElements(){
+  return {
+    cartOverlay: document.getElementById("cartOverlay"),
+    checkoutOverlay: document.getElementById("checkoutOverlay"),
+    checkoutBox: document.querySelector("#checkoutOverlay .checkout-box"),
+    detailsStage: document.getElementById("detailsStage"),
+    paymentStage: document.getElementById("paymentStage"),
+    checkoutTitle: document.getElementById("checkoutTitle"),
+    checkoutForm: document.getElementById("checkoutForm"),
+    customerName: document.getElementById("customerName"),
+    mobile: document.getElementById("mobile"),
+    address: document.getElementById("address"),
+    landmark: document.getElementById("landmark"),
+    size: document.getElementById("size"),
+    checkoutItems: document.getElementById("checkoutItems"),
+    checkoutSubtotal: document.getElementById("checkoutSubtotal"),
+    checkoutGst: document.getElementById("checkoutGst"),
+    checkoutTotal: document.getElementById("checkoutTotal"),
+    paySubtotal: document.getElementById("paySubtotal"),
+    payGst: document.getElementById("payGst"),
+    payTotal: document.getElementById("payTotal"),
+    upiLink: document.getElementById("upiLink"),
+    orderResult: document.getElementById("orderResult")
+  };
 }
-document.getElementById("checkoutBtn").addEventListener("click",()=>{
-  if(!cart.length)return alert("Please add at least one product.");
-  closeOverlay("cartOverlay");openOverlay("checkoutOverlay");renderCheckout();
-  document.getElementById("detailsStage").classList.remove("hidden");
-  document.getElementById("paymentStage").classList.add("hidden");
-  document.getElementById("checkoutTitle").textContent="Delivery details";
-});
-document.getElementById("checkoutForm").addEventListener("submit",e=>{
-  e.preventDefault();
-  customer={name:customerName.value.trim(),mobile:mobile.value.trim(),address:address.value.trim(),landmark:landmark.value.trim(),size:size.value};
-  if(!customer.name||!customer.mobile||!customer.address||!customer.landmark||!customer.size)return alert("Please fill all fields.");
-  detailsStage.classList.add("hidden");paymentStage.classList.remove("hidden");checkoutTitle.textContent="Payment";renderCheckout();
-});
-document.getElementById("backBtn").addEventListener("click",()=>{paymentStage.classList.add("hidden");detailsStage.classList.remove("hidden");checkoutTitle.textContent="Delivery details"});
-document.getElementById("paidBtn").addEventListener("click",()=>{
-  if(!customer)return;
-const t=totals(),orderId="LDR-"+Date.now().toString().slice(-8);
-  const lines=cart.map(i=>`${i.name} x ${i.qty} = ${money(i.price*i.qty)}`).join("%0A");
-  const msg=`LOONDRY Order%0AOrder ID: ${orderId}%0A%0A${lines}%0A%0ASubtotal: ${money(t.subtotal)}%0AGST: ${money(t.gst)}%0ATotal: ${money(t.total)}%0A%0AName: ${customer.name}%0AMobile: ${customer.mobile}%0ASize: ${customer.size}%0AAddress: ${customer.address}%0ALandmark: ${customer.landmark}`;
-  orderResult.classList.remove("hidden");
-  orderResult.innerHTML=`<h3>Order ID: ${orderId}</h3><div class="hero-actions"><a class="neo-btn interactive" target="_blank" rel="noopener" href="https://wa.me/${WHATSAPP}?text=${msg}">Send on WhatsApp</a><a class="neo-btn interactive" href="mailto:${EMAIL}?subject=LOONDRY Order ${orderId}&body=${msg.replaceAll("%0A","%0D%0A")}">Send Email</a></div>`;
+
+function renderCheckout(){
+  const el = getCheckoutElements();
+  const t = totals();
+
+  if(!el.checkoutItems) return;
+
+  el.checkoutItems.innerHTML = cart.map(item => `
+    <div class="order-line">
+      <span>${item.name} × ${item.qty}</span>
+      <b>${money(item.price * item.qty)}</b>
+    </div>
+  `).join("");
+
+  if(el.checkoutSubtotal) el.checkoutSubtotal.textContent = money(t.subtotal);
+  if(el.checkoutGst) el.checkoutGst.textContent = money(t.gst);
+  if(el.checkoutTotal) el.checkoutTotal.textContent = money(t.total);
+  if(el.paySubtotal) el.paySubtotal.textContent = money(t.subtotal);
+  if(el.payGst) el.payGst.textContent = money(t.gst);
+  if(el.payTotal) el.payTotal.textContent = money(t.total);
+
+  if(el.upiLink){
+    el.upiLink.href =
+      `upi://pay?pa=${encodeURIComponent(UPI_ID)}` +
+      `&pn=${encodeURIComponent("LOONDRY Urban")}` +
+      `&am=${encodeURIComponent(t.total)}` +
+      `&cu=INR` +
+      `&tn=${encodeURIComponent("LOONDRY Order")}`;
+  }
+}
+
+function LOONDRY_openCheckout(){
+  if(!cart.length){
+    alert("Please add at least one product before checkout.");
+    return false;
+  }
+
+  const el = getCheckoutElements();
+
+  closeOverlay("cartOverlay");
+  openOverlay("checkoutOverlay");
+
+  if(el.detailsStage) el.detailsStage.classList.remove("hidden");
+  if(el.paymentStage) el.paymentStage.classList.add("hidden");
+  if(el.checkoutTitle) el.checkoutTitle.textContent = "Delivery details";
+  if(el.orderResult){
+    el.orderResult.classList.add("hidden");
+    el.orderResult.innerHTML = "";
+  }
+
+  renderCheckout();
+
+  requestAnimationFrame(() => {
+    if(el.checkoutBox) el.checkoutBox.scrollTo({top:0, behavior:"smooth"});
+    if(el.customerName) el.customerName.focus({preventScroll:true});
+  });
+
+  return false;
+}
+
+function LOONDRY_closeCheckout(){
+  closeOverlay("checkoutOverlay");
+  return false;
+}
+
+function LOONDRY_backToDetails(){
+  const el = getCheckoutElements();
+  if(el.paymentStage) el.paymentStage.classList.add("hidden");
+  if(el.detailsStage) el.detailsStage.classList.remove("hidden");
+  if(el.checkoutTitle) el.checkoutTitle.textContent = "Delivery details";
+  if(el.checkoutBox) el.checkoutBox.scrollTo({top:0, behavior:"smooth"});
+  return false;
+}
+
+function collectCustomerDetails(){
+  const el = getCheckoutElements();
+
+  return {
+    name: el.customerName ? el.customerName.value.trim() : "",
+    mobile: el.mobile ? el.mobile.value.trim() : "",
+    address: el.address ? el.address.value.trim() : "",
+    landmark: el.landmark ? el.landmark.value.trim() : "",
+    size: el.size ? el.size.value : ""
+  };
+}
+
+function continueToPayment(event){
+  if(event) event.preventDefault();
+
+  const el = getCheckoutElements();
+  customer = collectCustomerDetails();
+
+  if(!customer.name || !customer.mobile || !customer.address || !customer.landmark || !customer.size){
+    alert("Please fill all delivery details before continuing.");
+    return false;
+  }
+
+  const digits = customer.mobile.replace(/\D/g, "");
+  if(digits.length < 10){
+    alert("Please enter a valid 10-digit mobile number.");
+    if(el.mobile) el.mobile.focus();
+    return false;
+  }
+
+  renderCheckout();
+
+  if(el.detailsStage) el.detailsStage.classList.add("hidden");
+  if(el.paymentStage) el.paymentStage.classList.remove("hidden");
+  if(el.checkoutTitle) el.checkoutTitle.textContent = "Payment";
+
+  requestAnimationFrame(() => {
+    if(el.checkoutBox) el.checkoutBox.scrollTo({top:0, behavior:"smooth"});
+  });
+
+  return false;
+}
+
+function LOONDRY_confirmPayment(){
+  const el = getCheckoutElements();
+
+  if(!customer){
+    alert("Please complete the delivery details first.");
+    LOONDRY_backToDetails();
+    return false;
+  }
+
+  if(!cart.length){
+    alert("Your cart is empty.");
+    LOONDRY_closeCheckout();
+    return false;
+  }
+
+  const t = totals();
+  const orderId = "LDR-" + Date.now().toString().slice(-8);
+
+  const plainLines = cart.map(item =>
+    `${item.name} x ${item.qty} = ${money(item.price * item.qty)}`
+  ).join("\n");
+
+  const plainMessage =
+`LOONDRY Order
+Order ID: ${orderId}
+
+Items:
+${plainLines}
+
+Subtotal: ${money(t.subtotal)}
+GST 18%: ${money(t.gst)}
+Total Paid: ${money(t.total)}
+
+Customer: ${customer.name}
+Mobile: ${customer.mobile}
+Size: ${customer.size}
+Address: ${customer.address}
+Landmark: ${customer.landmark}`;
+
+  const whatsappUrl =
+    `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(plainMessage)}`;
+
+  const emailUrl =
+    `mailto:${EMAIL}` +
+    `?subject=${encodeURIComponent("LOONDRY Order " + orderId)}` +
+    `&body=${encodeURIComponent(plainMessage)}`;
+
+  if(el.orderResult){
+    el.orderResult.classList.remove("hidden");
+    el.orderResult.innerHTML = `
+      <h3>Order ID: ${orderId}</h3>
+      <p style="color:var(--muted);font-weight:700;line-height:1.6">
+        Your order confirmation is ready. Send it to LOONDRY after completing the UPI payment.
+      </p>
+      <div class="hero-actions">
+        <a class="neo-btn interactive" target="_blank" rel="noopener" href="${whatsappUrl}">
+          Send on WhatsApp
+        </a>
+        <a class="neo-btn interactive" href="${emailUrl}">
+          Send Email
+        </a>
+      </div>
+    `;
+
+    requestAnimationFrame(() => {
+      el.orderResult.scrollIntoView({behavior:"smooth", block:"nearest"});
+    });
+  }
+
+  return false;
+}
+
+window.LOONDRY_openCheckout = LOONDRY_openCheckout;
+window.LOONDRY_closeCheckout = LOONDRY_closeCheckout;
+window.LOONDRY_backToDetails = LOONDRY_backToDetails;
+window.LOONDRY_confirmPayment = LOONDRY_confirmPayment;
+
+const checkoutButton = document.getElementById("checkoutBtn");
+if(checkoutButton){
+  checkoutButton.addEventListener("click", event => {
+    event.preventDefault();
+    LOONDRY_openCheckout();
+  });
+}
+
+const checkoutFormElement = document.getElementById("checkoutForm");
+if(checkoutFormElement){
+  checkoutFormElement.addEventListener("submit", continueToPayment);
+}
+
+const closeCheckoutButton = document.getElementById("closeCheckout");
+if(closeCheckoutButton){
+  closeCheckoutButton.addEventListener("click", event => {
+    event.preventDefault();
+    LOONDRY_closeCheckout();
+  });
+}
+
+const backButton = document.getElementById("backBtn");
+if(backButton){
+  backButton.addEventListener("click", event => {
+    event.preventDefault();
+    LOONDRY_backToDetails();
+  });
+}
+
+const paidButton = document.getElementById("paidBtn");
+if(paidButton){
+  paidButton.addEventListener("click", event => {
+    event.preventDefault();
+    LOONDRY_confirmPayment();
+  });
+}
+
+/* Close overlays when the shaded background is tapped, but not when a panel is tapped. */
+["cartOverlay","checkoutOverlay"].forEach(id => {
+  const overlay = document.getElementById(id);
+  if(overlay){
+    overlay.addEventListener("click", event => {
+      if(event.target === overlay) closeOverlay(id);
+    });
+  }
 });
 
 document.querySelectorAll("[data-filter]").forEach(btn=>btn.addEventListener("click",()=>{
